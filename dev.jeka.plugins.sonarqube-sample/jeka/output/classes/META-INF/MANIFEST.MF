@@ -1,4 +1,0 @@
-Manifest-Version: 1.0
-Spring-Boot-Version: 2.5.5
-Implementation-Version: main-SNAPSHOT
-
