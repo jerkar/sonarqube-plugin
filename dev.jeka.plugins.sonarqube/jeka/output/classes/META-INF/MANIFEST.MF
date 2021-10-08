@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+Implementation-Title: sonarqube-plugin
+Jeka-Lowest-Compatible-Version: 0.9.15.RELEASE
+Implementation-Version: main-SNAPSHOT
+Jeka-Breaking-Change-Url: https://raw.githubusercontent.com/jerkar/son
+ arqube-plugin/master/breaking_versions.txt
+Implementation-Vendor: dev.jeka
+
