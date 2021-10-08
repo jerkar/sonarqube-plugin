@@ -41,7 +41,8 @@ It can be used in conjunction of Jacoco
 
 `jeka java#pack @dev.jeka.plugins:jacoco:[version] jacoco# @dev.jeka.plugins:sonarqube:[version] sonarqube#run`
 
-To get help and options :
+### Get help
+
 `jeka sonarqube#help` or `jeka @dev.jeka.plugins:sonarqube:[version] sonarqube#help`
 
 ### Example
