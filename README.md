@@ -37,6 +37,10 @@ You can invoke Sonarqube plugin from command line on a Jeka project that does de
 
 `jeka java#pack @dev.jeka.plugins:sonarqube:[version] sonarqube#run`
 
+It can be used in conjunction of Jacoco 
+
+`jeka java#pack @dev.jeka.plugins:jacoco:[version] jacoco# @dev.jeka.plugins:sonarqube:[version] sonarqube#run`
+
 To get help and options :
 `jeka sonarqube#help`
 
