@@ -30,3 +30,4 @@ jobs:
       run: |
         cd ./dev.jeka.plugins.sonarqube
         ./jekaw java#pack java#publish
+
