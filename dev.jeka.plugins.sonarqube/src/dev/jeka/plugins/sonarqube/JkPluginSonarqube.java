@@ -7,6 +7,7 @@ import dev.jeka.core.api.java.project.JkCompileLayout;
 import dev.jeka.core.api.java.project.JkJavaProject;
 import dev.jeka.core.api.java.project.JkJavaProjectConstruction;
 import dev.jeka.core.api.system.JkLog;
+import dev.jeka.core.api.utils.JkUtilsString;
 import dev.jeka.core.tool.*;
 import dev.jeka.core.tool.builtins.java.JkPluginJava;
 
@@ -20,10 +21,6 @@ public class JkPluginSonarqube extends JkPlugin {
 
     private final Map<String, String> properties = new HashMap<>();
 
-    @JkDoc("If true, Sonarqube analysis will be run using sonarrunner instead of sonarscanner. This is necessary to run " +
-            "against some legacy sonar server.")
-    public boolean legacySonarServer;
-
     @JkDoc("If false, no sonar analysis will be performed")
     public boolean enabled = true;
 
@@ -33,11 +30,18 @@ public class JkPluginSonarqube extends JkPlugin {
     @JkDoc("If true, the list of test dependency files will be provided to sonarqube")
     public boolean provideTestLibs = false;
 
-    public JkPluginSonarqube(JkClass jkClass) {
+    @JkDoc("Version of the SonarQube client to run. It can be '+' for the latest one, at the price of a greater process time.\n" +
+            "Use a blank string to use the client embedded in the plugin.")
+    public String scannerVersion = "4.6.2.2472";
+
+    @JkDoc("If true, displays sonarqube output on console")
+    public boolean logOutput = false;
+
+    protected JkPluginSonarqube(JkClass jkClass) {
         super(jkClass);
     }
 
-    private JkSonarqube createConfiguredSonnarqube(JkJavaProject project) {
+    private JkSonarqube createConfiguredSonarqube(JkJavaProject project) {
         final JkCompileLayout prodLayout = project.getConstruction().getCompilation().getLayout();
         final JkCompileLayout testLayout = project.getConstruction().getTesting().getCompilation().getLayout();
         final Path baseDir = project.getBaseDir();
@@ -57,8 +61,16 @@ public class JkPluginSonarqube extends JkPlugin {
         final String version = project.getPublication().getVersion();
         final String fullName = moduleId.getDotedName();
         final String name = moduleId.getName();
-        JkSonarqube sonarqube = JkSonarqube
-                .of(fullName, name, version)
+        final JkSonarqube sonarqube;
+        if (JkUtilsString.isBlank(scannerVersion)) {
+            sonarqube = JkSonarqube.ofEmbedded();
+        } else {
+            sonarqube = JkSonarqube.ofVersion(project.getConstruction().getDependencyResolver().getRepos(),
+                    scannerVersion);
+        }
+        sonarqube
+                .setLogOutput(logOutput)
+                .setProjectId(fullName, name, version)
                 .setProperties(JkOptions.getAllStartingWith("sonar."))
                 .setProjectBaseDir(baseDir)
                 .setBinaries(project.getConstruction().getCompilation().getLayout().resolveClassDir())
@@ -69,23 +81,15 @@ public class JkPluginSonarqube extends JkPlugin {
                         baseDir.relativize( testReportDir.resolve("junit")).toString())
                 .setProperty(JkSonarqube.SUREFIRE_REPORTS_PATH,
                         baseDir.relativize(testReportDir.resolve("junit")).toString())
-                .setProperty(JkSonarqube.SOURCE_ENCODING, project.getConstruction().getSourceEncoding());
-        if (legacySonarServer) {
-            sonarqube.setProperty(JkSonarqube.JACOCO_LEGACY_REPORTS_PATHS,
-                    baseDir.relativize(project.getOutputDir().resolve("jacoco/jacoco.exec")).toString());
-            sonarqube
-                    .setProperty(JkSonarqube.LIBRARIES, libs);
-        } else {
-            sonarqube.setProperty(JkSonarqube.JACOCO_XML_REPORTS_PATHS,
-                    baseDir.relativize(project.getOutputDir().resolve("jacoco/jacoco.xml")).toString());
-            sonarqube
-                    .setProperty(JkSonarqube.JAVA_LIBRARIES, libs)
-                    .setProperty(JkSonarqube.JAVA_TEST_BINARIES, testLayout.getClassDirPath());
-            if (provideTestLibs) {
-                JkDependencySet deps = construction.getTesting().getCompilation().getDependencies();
-                JkPathSequence testLibs = project.getConstruction().getDependencyResolver().resolve(deps).getFiles();
-                sonarqube.setProperty(JkSonarqube.JAVA_TEST_LIBRARIES, testLibs);
-            }
+                .setProperty(JkSonarqube.SOURCE_ENCODING, project.getConstruction().getSourceEncoding())
+                .setProperty(JkSonarqube.JACOCO_XML_REPORTS_PATHS,
+                    baseDir.relativize(project.getOutputDir().resolve("jacoco/jacoco.xml")).toString())
+                .setProperty(JkSonarqube.JAVA_LIBRARIES, libs)
+                .setProperty(JkSonarqube.JAVA_TEST_BINARIES, testLayout.getClassDirPath());
+        if (provideTestLibs) {
+            JkDependencySet deps = construction.getTesting().getCompilation().getDependencies();
+            JkPathSequence testLibs = project.getConstruction().getDependencyResolver().resolve(deps).getFiles();
+            sonarqube.setProperty(JkSonarqube.JAVA_TEST_LIBRARIES, testLibs);
         }
         return sonarqube;
     }
@@ -99,12 +103,8 @@ public class JkPluginSonarqube extends JkPlugin {
             return;
         }
         JkJavaProject project = getJkClass().getPlugins().get(JkPluginJava.class).getProject();
-        JkSonarqube sonarqube = createConfiguredSonnarqube(project).setProperties(properties);
-        if (legacySonarServer) {
-            sonarqube.launchRunner();
-        } else {
-            sonarqube.launchScanner();
-        }
+        JkSonarqube sonarqube = createConfiguredSonarqube(project).setProperties(properties);
+        sonarqube.run();
     }
 
 }

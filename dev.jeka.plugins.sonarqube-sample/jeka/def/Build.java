@@ -8,8 +8,9 @@ import dev.jeka.core.tool.builtins.git.JkPluginGit;
 import dev.jeka.plugins.sonarqube.JkPluginSonarqube;
 import dev.jeka.plugins.springboot.JkPluginSpringboot;
 
-@JkDefClasspath("dev.jeka:springboot-plugin:3.0.0.RC10")
-@JkDefClasspath("../dev.jeka.plugins.sonarqube/jeka/output/dev.jeka.sonarqube-plugin.jar")
+@JkDefClasspath("dev.jeka:springboot-plugin:3.0.0.RC11")
+//@JkDefClasspath("../dev.jeka.plugins.sonarqube/jeka/output/dev.jeka.sonarqube-plugin.jar")
+@JkDefClasspath("../dev.jeka.plugins.sonarqube/jeka/output/classes")
 class Build extends JkClass {
 
     private final JkPluginSpringboot springboot = getPlugin(JkPluginSpringboot.class);
@@ -22,7 +23,7 @@ class Build extends JkClass {
     protected void setup() {
         springboot.setSpringbootVersion("2.5.5");
         JkJavaProject javaProject = springboot.javaPlugin().getProject();
-        javaProject.simpleFacade().setJavaVersion(JkJavaVersion.V11);
+        javaProject.simpleFacade().setJavaVersion(JkJavaVersion.V8);
         javaProject.simpleFacade()
             .setCompileDependencies(deps -> deps
                 .and("org.springframework.boot:spring-boot-starter-web")
@@ -45,6 +46,12 @@ class Build extends JkClass {
     @JkDoc("Cleans, tests and creates bootable jar.")
     public void cleanPack() {
         clean(); springboot.javaPlugin().pack();
+    }
+
+    @JkDoc("Cleans, tests and creates bootable jar.")
+    public void cleanSonar() {
+        clean();
+        springboot.javaPlugin().test();
         sonarqube.run();
     }
 

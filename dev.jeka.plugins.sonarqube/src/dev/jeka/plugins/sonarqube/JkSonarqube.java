@@ -1,11 +1,17 @@
 package dev.jeka.plugins.sonarqube;
 
 
+import dev.jeka.core.api.depmanagement.*;
+import dev.jeka.core.api.depmanagement.resolution.JkDependencyResolver;
+import dev.jeka.core.api.depmanagement.resolution.JkResolveResult;
 import dev.jeka.core.api.java.JkInternalClassloader;
 import dev.jeka.core.api.java.JkJavaProcess;
+import dev.jeka.core.api.java.JkJavaVersion;
 import dev.jeka.core.api.system.JkLog;
+import dev.jeka.core.api.utils.JkUtilsAssert;
 import dev.jeka.core.api.utils.JkUtilsIO;
 import dev.jeka.core.api.utils.JkUtilsPath;
+import dev.jeka.core.api.utils.JkUtilsSystem;
 
 import java.net.URL;
 import java.nio.file.Path;
@@ -51,13 +57,36 @@ public final class JkSonarqube {
     public static final String JDBC_URL = "jdbc.url";
     public static final String JDBC_USERNAME = "jdbc.username";
     public static final String JDBC_PASSWORD = "jdbc.password";
-    private static final String RUNNER_JAR_NAME_24 = "sonar-runner-2.4.jar";
     private static final String SCANNER_JAR_NAME_46 = "sonar-scanner-cli-4.6.2.2472.jar";
     private static final String SONAR_PREFIX = "sonar.";
 
     private final Map<String, String> params = new HashMap<>();
 
-    public static JkSonarqube of(String projectKey, String projectName, String version) {
+    private final JkRepoSet repos;
+
+    private final String sonnarScannerVersion;
+
+    private boolean logOutput;
+
+    private JkSonarqube(JkRepoSet repos, String sonarScannerVersion) {
+        this.repos = repos;
+        this.sonnarScannerVersion = sonarScannerVersion;
+    }
+
+    public static JkSonarqube ofEmbedded() {
+        return new JkSonarqube(null, null);
+    }
+
+    public static JkSonarqube ofVersion(JkRepoSet repos, String version) {
+        return new JkSonarqube(repos, version);
+    }
+
+    public static JkSonarqube ofVersion(String version) {
+        return ofVersion(JkRepo.ofMavenCentral().toSet(), version);
+    }
+
+
+    public JkSonarqube setProjectId(String projectKey, String projectName, String version) {
         final Map<String, String> map = new HashMap<>();
         map.put(PROJECT_KEY, projectKey);
         map.put(PROJECT_NAME, projectName);
@@ -71,35 +100,30 @@ public final class JkSonarqube {
                 map.put(key.substring(SONAR_PREFIX.length()), properties.getProperty(key));
             }
         }
-        return new JkSonarqube().setProperties(map);
+        this.setProperties(map);
+        return this;
     }
 
-    // Runner is the legacy client
-    public void launchRunner() {
-        launch(RUNNER_JAR_NAME_24, "org.sonar.runner.Main");
+    public JkSonarqube setLogOutput(boolean logOutput) {
+        this.logOutput = logOutput;
+        return this;
     }
 
-    // Scanner replaces legacy Runner client
-    public void launchScanner() {
-        launch(SCANNER_JAR_NAME_46, "org.sonarsource.scanner.cli.Main");
-    }
-
-    private void launch(String resourcePath, String mainClassName) {
-        JkLog.startTask("Launch Sonar analysis wih " + resourcePath);
+    public void run() {
+        JkLog.startTask("Launch Sonar analysis");
+        Path jar = getToolJar();
         String[] args = JkLog.isVerbose() ? new String[] {"-e", "-X"} : new String[] {"-e"};
-        javaProcess(resourcePath, mainClassName).exec(args);
+        javaProcess(jar, "org.sonarsource.scanner.cli.Main").exec(args);
         JkLog.endTask();
     }
 
-    private JkJavaProcess javaProcess(String jarResourcePath, String mainClassName) {
-        URL embeddedUrl = JkSonarqube.class.getResource(jarResourcePath);
-        Path cachedUrl = JkUtilsIO.copyUrlContentToCacheFile(embeddedUrl, null, JkInternalClassloader.URL_CACHE_DIR);
+    private JkJavaProcess javaProcess(Path jar, String mainClassName) {
         return JkJavaProcess.ofJava(mainClassName)
-                .setClasspath(cachedUrl)
+                .setClasspath(jar)
                 .setFailOnError(true)
                 .addParams(toProperties())
                 .setLogCommand(JkLog.isVerbose())
-                .setLogOutput(JkLog.isVerbose());
+                .setLogOutput(JkLog.isVerbose() || logOutput);
     }
 
     private List<String> toProperties() {
@@ -179,6 +203,38 @@ public final class JkSonarqube {
 
     private Path projectDir() {
         return Paths.get(this.params.get(PROJECT_BASE_DIR));
+    }
+
+    private Path getToolJar() {
+        JkJavaVersion javaVersion = JkJavaVersion.of(System.getProperty("java.version"));
+        JkUtilsAssert.state(javaVersion.compareTo(JkJavaVersion.V11) >= 0,
+                "Sonarqube has to run on JRE >= 11. You are running on version " + javaVersion);
+        if (this.sonnarScannerVersion == null) {
+            URL embeddedUrl = JkSonarqube.class.getResource(SCANNER_JAR_NAME_46);
+            JkLog.info("Use embedded sonar scanner : " + SCANNER_JAR_NAME_46);
+            return JkUtilsIO.copyUrlContentToCacheFile(embeddedUrl, null, JkInternalClassloader.URL_CACHE_DIR);
+        }
+        JkModuleDependency moduleDep = JkModuleDependency
+                .of("org.sonarsource.scanner.cli", "sonar-scanner-cli", this.sonnarScannerVersion)
+                .withTransitivity(JkTransitivity.NONE);
+        JkDependencyResolver dependencyResolver = JkDependencyResolver.of()
+                .addRepos(repos)
+                .getParams()
+                    .setFailOnDependencyResolutionError(false)
+                .__;
+        JkResolveResult resolveResult = dependencyResolver.resolve(JkDependencySet.of().and(moduleDep));
+        if (resolveResult.getErrorReport().hasErrors()) {
+            StringBuilder sb = new StringBuilder();
+            String coordinates =  moduleDep.getModuleId().withVersion(this.sonnarScannerVersion).toString();
+            sb.append("Cannot find dependency " + coordinates + "\n");
+            List<String> versions = dependencyResolver.searchVersions(moduleDep.getModuleId());
+            sb.append("Known versions are : \n");
+            versions.forEach(name -> sb.append(name + "\n"));
+            throw new IllegalStateException(sb.toString());
+        }
+        JkVersion effectiveVersion = resolveResult.getVersionOf(moduleDep.getModuleId());  // Get effective version if specified one is '+'
+        JkLog.info("Run sonar scanner " + effectiveVersion);
+        return resolveResult.getFiles().getEntries().get(0);
     }
 
 }
