@@ -96,6 +96,7 @@ public final class JkSonarqube {
         Path cachedUrl = JkUtilsIO.copyUrlContentToCacheFile(embeddedUrl, null, JkInternalClassloader.URL_CACHE_DIR);
         return JkJavaProcess.ofJava(mainClassName)
                 .setClasspath(cachedUrl)
+                .setFailOnError(true)
                 .addParams(toProperties())
                 .setLogCommand(JkLog.isVerbose())
                 .setLogOutput(JkLog.isVerbose());

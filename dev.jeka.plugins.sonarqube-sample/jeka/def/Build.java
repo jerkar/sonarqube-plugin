@@ -1,12 +1,10 @@
 import dev.jeka.core.api.java.JkJavaVersion;
 import dev.jeka.core.api.java.project.JkJavaProject;
-import dev.jeka.core.api.system.JkProcess;
 import dev.jeka.core.tool.JkClass;
 import dev.jeka.core.tool.JkDefClasspath;
 import dev.jeka.core.tool.JkDoc;
 import dev.jeka.core.tool.JkInit;
 import dev.jeka.core.tool.builtins.git.JkPluginGit;
-import dev.jeka.core.tool.builtins.jacoco.JkPluginJacoco;
 import dev.jeka.plugins.sonarqube.JkPluginSonarqube;
 import dev.jeka.plugins.springboot.JkPluginSpringboot;
 
@@ -19,8 +17,6 @@ class Build extends JkClass {
     private final JkPluginGit git = getPlugin(JkPluginGit.class);
 
     private final JkPluginSonarqube sonarqube = getPlugin(JkPluginSonarqube.class);
-
-    private final JkPluginJacoco jacoco = getPlugin(JkPluginJacoco.class);
 
     @Override
     protected void setup() {
@@ -42,7 +38,7 @@ class Build extends JkClass {
                 .__
                 .getPublication()
                     .getMaven()
-                        .setVersion(git.getWrapper().getVersionFromTag());
+                        .setVersion(git.getGitProcess().getVersionFromTag());
         sonarqube.provideTestLibs = true;
     }
 
