@@ -9,7 +9,7 @@ A Sonarqube plugin for Jeka
 
 ### Common usage
 
-Just declare the plugin in your build class.  
+Just declare the plugin in your build class.
 
 ```java
 @JkDefClasspath("dev.jeka.plugins:sonarqube:[version]")
