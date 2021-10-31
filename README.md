@@ -6,7 +6,7 @@
 A Sonarqube plugin for Jeka
 
 ## How to use
-
+ 
 ### Common usage
 
 Just declare the plugin in your build class.
